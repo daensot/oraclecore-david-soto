@@ -17,7 +17,7 @@ representativos, correcciones a código de IA y estimación de código generado.
   object types, package spec+body, datos iniciales, consulta Sección B y script de pruebas.
 - `user_errors` vacío y 19 objetos en estado VALID.
 - Commits progresivos: `5c2d32a` (A.1) → `c36e79e` (A.2–A.4) → `c046299` (B y pruebas).
-- Los casos de prueba con error business esperado (−20003 duplicado, −20001 inexistente)
+- Los casos de prueba con error de negocio esperado (−20003 duplicado, −20001 inexistente)
   se ejecutaron y documentaron en `scripts/pruebas_seccion_a.sql` y README §4.
 
 ## 1ter. Registro de la fase de implementación P1 — Sección C
@@ -55,8 +55,10 @@ representativos, correcciones a código de IA y estimación de código generado.
 
 ## 2. Decisiones técnicas y su justificación (hasta el momento)
 
-> Estado: decisiones **de planificación**. Las implementaciones se documentarán al
-> materializarse (ver `memory.md` §2 para la versión viva).
+> Las decisiones preliminares se materializaron y se verificaron en Oracle XE 21c: A.1–A.5,
+> B, C y D (ver §1bis/§1ter/§1quater y `memory.md` §2 para la versión viva). El rango final
+> adoptado quedó en −20001…−20005 (catálogos), −20010…−20020 (transacciones y carga) y
+> −20099 (falla simulada).
 
 - **Modelo de catálogos y auditoría.** Dos tablas (`ttem_catalog`, `ttem_item`) con
   auditoría obligatoria de creación/modificación y, como mejora, `ttem_audit_log`. Justificación:
@@ -66,7 +68,7 @@ representativos, correcciones a código de IA y estimación de código generado.
 - **Eliminación lógica vs física.** Decisión preliminar: **lógica** (`status = 'I'` del
   ítem, nunca borrado físico). Justificación: preserva referencias y trazabilidad, y el
   sistema del Anexo A ya modela estados (A/I) del mismo modo.
-- **Rango de errores propios: −20000 … −20029.** Justificación: diferenciar error de
+- **Rango de errores propios: −20000 … −20099.** Justificación: diferenciar error de
   negocio (ítem inexistente, referencia duplicada) de error técnico; reservo un subrango
   pequeño y documentado por dominio (catálogos −2000x, transacciones −2001x, −2002x
   disponible) en lugar de códigos dispersos. La tabla completa está en el README.
@@ -129,7 +131,7 @@ contenido real del repositorio, no avance ficticio. Este archivo es el resultado
 Al pedir el CRUD al agente se fijaron por adelantado las restricciones (cero
 `WHEN OTHERS THEN NULL`, bind variables, JSON nativo, savepoints). El cuerpo generado
 respetó el patrón; los `WHEN OTHERS` existentes hacen `ROLLBACK TO` savepoint y relanzan.
-*(Si apareciera alguno silenciador durante las próximas secciones, se documentará aquí.)*
+*(El silenciador apareció después, en el borrador del A.5: ver Caso 4.)*
 
 ### Caso 3 (durante la implementación de la Sección C): verificador del script de pruebas
 
@@ -167,10 +169,12 @@ respetó el patrón; los `WHEN OTHERS` existentes hacen `ROLLBACK TO` savepoint 
 |---------|------------------------|--------------------------|
 | Preparación (documentación y specs) | ~100 % de los `.md` (revisados/ajustados por mí) | ~0 % (con correcciones de erratas y decisiones de contenido) |
 | Implementación P0 (DDL, PL/SQL, scripts y pruebas) | ~90 % del texto de los scripts, instruido con las restricciones del `agent.md` | ~10 % (estructura de espec, decisiones de API, ajuste del trigger de bitácora, revisión línea a línea y verificación ejecutada por mí: cada constraint y cada manejador fue revisado y aceptado) |
+| Sección C (P1) | ~85 % (`pkg_core_settlement` + script de pruebas) | ~15 % (decisiones de API: `trx_id` de salida, modo de falla simulada, orden de bloqueo ascendente de cuentas; diagnóstico de que la falla estaba en el script de prueba, no en el package — Caso 3) |
+| Fases finales (Sección D y A.5) | ~90 % (borrador de README §7, `pkg_ttem_load` + script A.5) | ~10 % (corrección pre-compilación del mapa de claves y del `WHEN OTHERS` silenciador — Caso 4 — y compactación final de la Sección D al límite de 20 líneas del enunciado) |
 
 *(Compromiso: revisar todo lo generado antes de compilarlo y poder explicar cada constraint
 y cada bloque de manejo de excepciones entregado — cumplido en la pasada de revisión
-documentada en §2 y en el caso 1 de §4.)*
+documentada en §2 y en los casos 1, 3 y 4 de §4.)*
 
 ## 6. Uso de agentes: contexto entregado
 
