@@ -30,6 +30,9 @@ Hecho / Parcial / No hecho.
 
 ## 3. Evidencia de verificación (Oracle XE 21c, esquema donde se probó)
 
+- Verificado en **dos esquemas**: `CORE_DEV` (esquema de desarrollo del Anexo B, secuencia
+  completa del README: setup 01/02 + ddl + packages + los 4 scripts de pruebas en verde)
+  y, de forma previa, en un esquema espejo de prueba con el mismo resultado.
 - `user_errors` vacío; los 27 objetos propios en estado VALID (tablas TTEM catálogo + bitácora
   + errores, 4 secuencias, 3 triggers, 2 tipos, 3 packages spec+body, índices propios).
 - Cargas: `03_ttem_datos.sql` → TTEM_CATALOG 2, TTEM_ITEM 3, TTEM_AUDIT_LOG 3;
