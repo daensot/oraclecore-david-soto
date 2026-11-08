@@ -14,9 +14,9 @@ Proyecto: **CoreCatalog & Settlement** — catálogos parametrizables y consulta
 
 ```
 setup/    scripts del Anexo B, SIN modificaciones
-ddl/      01 tipos (Object Types) · 02 tablas TTEM_* + auditoría · 03 datos iniciales
-plsql/    pkg_ttem_catalog.pks/.pkb (Sección A) · pkg_core_settlement.pks/.pkb (Sección C)
-scripts/  seccion_b_consulta_cliente.sql (B) · pruebas_seccion_a.sql (A) · pruebas_seccion_c.sql (C)
+ddl/      01 tipos (Object Types) · 02 tablas TTEM_* + auditoría · 03 datos iniciales · 04 ttem_load_error (A.5)
+plsql/    pkg_ttem_catalog.pks/.pkb (A) · pkg_core_settlement.pks/.pkb (C) · pkg_ttem_load.pks/.pkb (A.5)
+scripts/  seccion_b_consulta_cliente.sql (B) · pruebas_seccion_a.sql · pruebas_seccion_c.sql · pruebas_seccion_a5.sql
 specs/    especificaciones funcionales por sección
 ```
 
@@ -51,6 +51,9 @@ SQL> @plsql/pkg_ttem_catalog.pks   -- spec del package de catalogos
 SQL> @plsql/pkg_ttem_catalog.pkb   -- body del package de catalogos
 SQL> @plsql/pkg_core_settlement.pks -- spec del package de liquidacion (Seccion C)
 SQL> @plsql/pkg_core_settlement.pkb -- body del package de liquidacion (Seccion C)
+SQL> @ddl/04_ttem_load_error.sql    -- tabla de errores de la carga masiva (A.5, P2)
+SQL> @plsql/pkg_ttem_load.pks       -- spec del package de carga masiva (A.5, P2)
+SQL> @plsql/pkg_ttem_load.pkb       -- body del package de carga masiva (A.5, P2)
 
 -- 4) Verificación de compilación (esperado: sin filas):
 SELECT name, line, text FROM user_errors;
@@ -107,10 +110,32 @@ Decisiones: la transacción la controla el **procedimiento** (`SAVEPOINT sp_tran
 `COMMIT` al final, `ROLLBACK TO` + `RAISE` ante error) y las cuentas se bloquean con
 `SELECT ... FOR UPDATE` en orden ascendente de `account_no` para evitar deadlocks.
 
+**A.5 — Carga masiva del lote** (`plsql/pkg_ttem_load.pkb`, probado con
+`scripts/pruebas_seccion_a5.sql`):
+
+```sql
+DECLARE
+  l_cargados   PLS_INTEGER;
+  l_rechazados PLS_INTEGER;
+BEGIN
+  pkg_ttem_load.procesar_lote('LOTE-2026-10', l_cargados, l_rechazados);
+  DBMS_OUTPUT.PUT_LINE('cargados ' || l_cargados || ' / rechazados ' || l_rechazados);
+END;
+/
+-- salida: cargados 5 / rechazados 7   (criterio de control del enunciado)
+```
+
+`BULK COLLECT ... LIMIT 100` + `FORALL ... SAVE EXCEPTIONS`; un registro inválido no
+interrumpe el lote: los 7 rechazos del criterio de control quedan en `ttem_load_error` con
+motivo (duplicado en lote, catálogo inexistente, código/nombre vacíos, fecha inválida,
+vigencia incoherente, PEN duplicado) y el staging queda `S`/`E` con `processed_at`.
+Segunda corrida del mismo lote → `ORA-20020` (sin pendientes, no duplica items).
+
 ## 5. Tabla de códigos de error propios (Sección A.3)
 
 Rango adoptado: **−20000 … −20099** (negocio). Dominios: −20001…−20005 catálogos (Sección A);
-−20010…−20029 transacciones (Sección C); −20099 error controlado de falla simulada.
+−20010…−20029 transacciones y carga masiva (Sección C y A.5); −20099 error controlado de
+falla simulada.
 
 | Código | Excepción | Significado |
 |--------|------------|-------------|
@@ -129,6 +154,8 @@ Rango adoptado: **−20000 … −20099** (negocio). Dominios: −20001…−200
 | -20017 | `E_TRX_DATO_OBLIGATORIO` | Referencia o moneda vacía / modo inválido (Sección C) |
 | -20018 | `E_TRX_NO_REVERSIBLE` | Movimiento no revertible o ya revertido (reversa, Sección C) |
 | -20099 | `E_TRX_FALLA_SIMULADA` | Error controlado para demostrar atomicidad (`p_simular_falla='S'`) |
+| -20019 | `E_STG_FECHA_INVALIDA` | Fecha de staging con formato distinto a YYYY-MM-DD (A.5) |
+| -20020 | `E_LOTE_SIN_PENDIENTES` | Lote solicitado sin registros pendientes (flag N) (A.5) |
 
 ## 6. Comportamiento de la consulta de la Sección B
 
@@ -148,7 +175,34 @@ bloqueada), `9999999999999` (0 filas).
 
 ## 7. Sección D — Propuesta de mejora (≤ 20 líneas)
 
-⬜ Por escribir (P1). Estructura comprometida en `specs/04-seccion-d-criterio.md`.
+Escenario: el alta de ítems de catálogo (comisiones) se pide por correo y la ejecuta a mano
+un desarrollador en producción. Hubo incidentes de vigencias mal configuradas y cambios sin
+trazabilidad de aprobación.
+
+1. **Automatizar primero y qué resuelve:** el canal de solicitud/ejecución — pasar el
+   "correo + script manual" a un flujo de solicitud y carga en la BD con validación
+   automática del modelo de la Sección A. Resuelve los dos problemas concretos: vigencias
+   incoherentes (se rechazan al instante, como en `ttem_item_stg`) y ausencia de trazabilidad
+   de aprobación.
+2. **Pasos y componentes:** (1) solicitud en formulario/ticket con los datos del ítem
+   (catálogo, código, vigencias) que se validan en vivo contra `ttem_catalog`/`ttem_item`;
+   (2) la solicitud queda `PENDIENTE`; (3) **aprobación del segundo responsable** (no puede
+   aprobar quien creó la solicitud); (4) carga a staging `ttem_item_stg` y ejecución del
+   package de carga (`pkg_ttem_load`): normaliza TRIM/UPPER, valida por registro y genera
+   el reporte de rechazos en `ttem_load_error`; (5) notificación del resultado al
+   solicitante con el detalle de los rechazos.
+3. **Controles:** maker–checker (crear ≠ aprobar), auditoría completa ya disponible en
+   `ttem_audit_log` (quién cambió qué, valores anteriores y nuevos en JSON), reversión por
+   ítem restituyendo los `old_values` del último evento, y eventuales vigencias siempre
+   `valid_to >= valid_from` (constraint ya existente).
+4. **Riesgos / dependencias / factibilidad:** requiere mitigar el hábito del "arreglo
+   rápido en producción" (gobernanza, no tecnología); dependencia de un canal de ticket
+   formal y de designar aprobadores por área; factibilidad alta porque reutiliza el modelo
+   y el package ya construidos (esfuerzo estimado: 2-3 semanas del equipo core-PL/SQL).
+5. **Medición:** incidentes de vigencias mal configuradas → 0; 100 % de cambios con
+   aprobador registrado; tiempo de alta de un ítem (hoy: minutos/horas de un desarrollador
+   con riesgo humano, objetivo < 1 hora sin intervención de TI); proporción de solicitudes
+   rechazadas por el validador automático (indicador de calidad de captura).
 
 ## 8. Documentos complementarios
 

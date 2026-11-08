@@ -46,10 +46,12 @@ examen. Complementa `agent.md` (contexto del agente) y `AI-LOG.md` (bitácora de
 | -20016 | `E_TRX_CUENTAS_IGUALES` | Origen = destino (Sección C) |
 | -20017 | `E_TRX_DATO_OBLIGATORIO` | Referencia o moneda vacía / modo inválido (Sección C) |
 | -20018 | `E_TRX_NO_REVERSIBLE` | Movimiento no revertible o ya revertido (reversa) |
+| -20019 | `E_STG_FECHA_INVALIDA` | Fecha de staging con formato distinto a YYYY-MM-DD (A.5) |
+| -20020 | `E_LOTE_SIN_PENDIENTES` | Lote sin registros pendientes (flag N) (A.5, idempotencia de la carga) |
 | -20099 | `E_TRX_FALLA_SIMULADA` | Error controlado para demostrar atomicidad (Sección C) |
 
-*(Rango −20010…−20099 de la Sección C: implementado en `pkg_core_settlement` y verificado;
-los nuevos códigos −20017/−20018/−20099 quedan documentados en el README.)*
+*(Rango −20010…−20099 de las Secciones C y A.5: implementado y verificado; la tabla se
+mantiene sincronizada con el README.)*
 
 ## 4. Supuestos documentados sobre datos inconsistentes
 
@@ -75,8 +77,8 @@ los nuevos códigos −20017/−20018/−20099 quedan documentados en el README.
 | A.4 JSON por ItemId | Hecho | Salida USD exacta al ejemplo del enunciado |
 | B Consulta cliente | Hecho | 5 casos verificados; inexistente → 0 filas |
 | C Transferencia | Hecho | `pkg_core_settlement` VALID; 6 casos + extras + reversa en verde (ver AI-LOG §1ter) |
-| D Propuesta de mejora | Pendiente (P1) | Único pendiente del enunciado; redacción en README |
-| A.5 Carga masiva | Pendiente (P2) | Solo si sobra tiempo |
+| D Propuesta de mejora | Hecho | README §7: flujo solicitud → maker–checker → carga via staging → auditoría/reversión (≤20 líneas) |
+| A.5 Carga masiva | Hecho (P2) | `pkg_ttem_load` BULK COLLECT LIMIT + FORALL SAVE EXCEPTIONS; 5 cargados / 7 rechazados exacto (ver AI-LOG §1quater) |
 
 ## 6. Correcciones / rechazo de código generado por IA
 

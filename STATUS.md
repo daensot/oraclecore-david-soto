@@ -24,22 +24,27 @@ Hecho / Parcial / No hecho.
 | A.3 Validaciones y excepciones propias | Hecho | Existencia catálogo/ítem, duplicados, vigencias, datos obligatorios, estado A/I; códigos −20001…−20005 documentados (README §5); cero `WHEN OTHERS THEN NULL`: los `WHEN OTHERS` hacen ROLLBACK TO savepoint y relanzan |
 | A.4 Consulta JSON por ItemId | Hecho | `obtener_item_json` con `JSON_OBJECT ... NULL ON NULL RETURNING CLOB`; salidas probadas: USD (formato exacto del contrato/ejemplo del enunciado) y −20001 para ítem inexistente |
 | B Consulta de cliente por cuenta | Hecho | `scripts/seccion_b_consulta_cliente.sql`; LISTAGG con estado, nombre normalizado (TRIM + compresión de espacios), fecha de referencia con tipo; los 5 casos verificados (inexistente → 0 filas) |
-| C Transferencia con falla simulada | Hecho | `pkg_core_settlement` spec+body VALID; 6 casos del enunciado en verde (duplicada → −20015, saldo → −20014, moneda → −20013, bloqueada → −20012, falla sim. → −20099 con saldos y CORE_TRX intactos) + extras (monto, referencia, cuentas iguales, inexistente); transacción controlada por el procedimiento (SAVEPOINT/COMMIT/ROLLBACK+RAISE) y bloqueo FOR UPDATE en orden ascendente de account_no. Bonus: `revertir` con idempotencia (−20018) |
-| D Propuesta de mejora | No hecho | (P1) Único pendiente; estructura de 5 puntos esbozada en specs/04 |
-| A.5 Carga masiva (P2) | No hecho | Solo si sobra tiempo; criterio 5 cargados / 7 rechazados |
+| C Transferencia con falla simulada | Hecho | `pkg_core_settlement` spec+body VALID; 6 casos del enunciado en verde (duplicada → −20015, saldo → −20014, moneda → −20013, bloqueada → −20012, falla sim. → −20099 con saldos y CORE_TRX intactos) + extras; bonus `revertir` con idempotencia (−20018) |
+| D Propuesta de mejora | Hecho | Respuesta en README §7 dentro de ≤ 20 líneas, sin código: flujo solicitud → aprobación (maker–checker) → carga via staging con `pkg_ttem_load` → reversión con `ttem_audit_log`; riesgos y metricas definidas |
+| A.5 Carga masiva (P2) | Hecho | `pkg_ttem_load` con BULK COLLECT LIMIT 100 + FORALL SAVE EXCEPTIONS; lote LOTE-2026-10 termina con **5 cargados / 7 rechazados** (criterio de control exacto); log en `ttem_load_error`, staging S/E; segunda corrida → ORA-20020 |
 
 ## 3. Evidencia de verificación (Oracle XE 21c, esquema donde se probó)
 
-- `user_errors` vacío; los 19 objetos propios en estado VALID (2 tablas catálogo, bitácora,
-  3 secuencias, 3 triggers incluido `trg_ttem_item_log`, 2 tipos, package spec+body).
-- `03_ttem_datos.sql`: TTEM_CATALOG 2, TTEM_ITEM 3, TTEM_AUDIT_LOG 3.
+- `user_errors` vacío; los 27 objetos propios en estado VALID (tablas TTEM catálogo + bitácora
+  + errores, 4 secuencias, 3 triggers, 2 tipos, 3 packages spec+body, índices propios).
+- Cargas: `03_ttem_datos.sql` → TTEM_CATALOG 2, TTEM_ITEM 3, TTEM_AUDIT_LOG 3;
+  `pruebas_seccion_a5.sql` → TTEM_ITEM 8, staging S=5 E=7, TTEM_LOAD_ERROR=7.
 - Casos A: insertar EUR (código y nombre con espacios → normalizados), duplicado
   ORA-20003, JSON USD exacto, JSON inexistente ORA-20001, eliminar lógico → estado 'I',
   collection `consultar_items` con 3 ítems ordenados.
 - Sección B: 4 cuentas con datos coincidentes al enunciado + cuenta inexistente (0 filas).
+- Sección C: 6 casos del enunciado + 6 validaciones extra + reversa y su idempotencia (ver AI-LOG §1ter).
+- A.5: los 7 motivos de rechazo coinciden uno a uno con los datos inconsistentes del
+  lote (duplicado en lote, catálogo inexistente, código/nombre vacíos, fecha inválida
+  `2026-13-01`, vigencia incoherente, PEN duplicado).
 
 ## 4. Próximos pasos
 
-1. **D (P1)** — redacción final de la propuesta de mejora en README (≤ 20 líneas, sin código).
-2. **A.5 (P2)** — carga masiva del lote `LOTE-2026-10` solo si queda tiempo (5 cargados / 7 rechazados).
-3. Sincronizar final de README/STATUS/AI-LOG antes del último commit.
+1. Opcional: primera corrida end-to-end limpia (todo el setup y todas las pruebas) en una
+   instancia XE/23ai nueva, siguiendo el README, para comprobar la experiencia de
+   "clonar, compilar y probar en menos de 5 minutos".

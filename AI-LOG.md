@@ -35,6 +35,24 @@ representativos, correcciones a código de IA y estimación de código generado.
   - Bonus: reversa (fila REV con cuentas invertidas, saldos 5250 / 350.50); la segunda
     reversa se rechaza con −20018.
 
+## 1quater. Registro de las fases finales — Sección D y A.5 (P2)
+
+- **Sección D (P1):** respuesta en README §7 dentro de ≤ 20 líneas y sin código: flujo
+  solicitud (con validación en vivo contra `ttem_catalog`/`ttem_item`) → estado PENDIENTE →
+  aprobación maker–checker → carga a `ttem_item_stg` ejecutada por `pkg_ttem_load` →
+  notificación con rechazos; controles (second checker, `ttem_audit_log`, reversión con
+  old_values, constraint de vigencias); riesgos/dependencias y métricas (incidentes 0,
+  trazabilidad 100 %, tiempo de alta < 1 hora). Markdown y sin código.
+- **A.5 (P2):** `ddl/04_ttem_load_error.sql` + `plsql/pkg_ttem_load.pks/.pkb` con
+  `BULK COLLECT ... LIMIT 100` y `FORALL ... SAVE EXCEPTIONS`; tabla propia
+  `ttem_load_error` (stg_id + motivo + FK a staging). Corrida del lote `LOTE-2026-10`
+  tras restaurar el estado base: **5 cargados / 7 rechazados** (criterio de control
+  exacto del enunciado), staging `S`/`E` con `processed_at`, auditoría con 5 eventos I
+  nuevos, y la segunda corrida rechazada con `ORA-20020` (sin pendientes → no duplica).
+  Los 7 motivos coinciden uno a uno con los datos incorrectos del lote: duplicado dentro
+  del lote (stg 5), catálogo inexistente (6), código vacío (7), nombre vacío (8), fecha
+  inválida 2026-13-01 (9), vigencia incoherente (10) y PEN duplicado con ítem existente (12).
+
 ## 2. Decisiones técnicas y su justificación (hasta el momento)
 
 > Estado: decisiones **de planificación**. Las implementaciones se documentarán al
@@ -87,19 +105,6 @@ contenido real del repositorio, no avance ficticio. Este archivo es el resultado
 
 ## 4. Casos documentados de corrección / rechazo de código generado por IA
 
-### Caso 3 (durante la implementación de la Sección C): verificador del script de pruebas
-
-- **Código generado por IA:** en `scripts/pruebas_seccion_c.sql`, el manejador del bloque
-  de validaciones extra usaba `CASE SQLCODE WHEN a OR b THEN ...` (con un `||` mezclado
-  entre los operadores).
-- **Qué pasó:** el rechazo esperado de "cuentas iguales" (−20016) no entraba por la rama
-  correcta: se interpretó como *FALLA INESPERADA* y el bloque terminó con error aunque el
-  package se comportó bien.
-- **Corrección:** simplificar a `IF SQLCODE IN (...) THEN ... ELSE ... RAISE; END IF` con
-  la lista completa de códigos esperados. Re-corrida limpia: los 13 controles en verde.
-- **Lección:** el error estaba en el **script de prueba**, no en el package; separar la
-  lógica de negocio de la de verificación evita culpar al código correcto.
-
 ### Caso 1 (12-nov-2026 durante la implementación de A.1): trigger de bitácora con predicados en CASE
 
 - **Código generado por IA:** trigger `trg_ttem_item_log` que llenaba `ttem_audit_log`
@@ -125,6 +130,36 @@ Al pedir el CRUD al agente se fijaron por adelantado las restricciones (cero
 `WHEN OTHERS THEN NULL`, bind variables, JSON nativo, savepoints). El cuerpo generado
 respetó el patrón; los `WHEN OTHERS` existentes hacen `ROLLBACK TO` savepoint y relanzan.
 *(Si apareciera alguno silenciador durante las próximas secciones, se documentará aquí.)*
+
+### Caso 3 (durante la implementación de la Sección C): verificador del script de pruebas
+
+- **Código generado por IA:** en `scripts/pruebas_seccion_c.sql`, el manejador del bloque
+  de validaciones extra usaba `CASE SQLCODE WHEN a OR b THEN ...` (con un `||` mezclado
+  entre los operadores).
+- **Qué pasó:** el rechazo esperado de "cuentas iguales" (−20016) no entraba por la rama
+  correcta: se interpretó como *FALLA INESPERADA* y el bloque terminó con error aunque el
+  package se comportó bien.
+- **Corrección:** simplificar a `IF SQLCODE IN (...) THEN ... ELSE ... RAISE; END IF` con
+  la lista completa de códigos esperados. Re-corrida limpia: los 13 controles en verde.
+- **Lección:** el error estaba en el **script de prueba**, no en el package; separar la
+  lógica de negocio de la de verificación evita culpar al código correcto.
+
+### Caso 4 (durante la implementación del A.5): array de claves y silenciador de fecha — detectados y corregidos antes de compilar
+
+- **Código generado por IA:** en el primer borrador de `pkg_ttem_load` usaba
+  `DBMS_SQL.VARCHAR2_TABLE` (indexado por entero) para detectar duplicados de claves de
+  texto (`catalogo|codigo`), y la función de fechas capturaba el error de `TO_DATE` con un
+  `WHEN OTHERS` que devolvía el motivo para abajo sin relanzar.
+- **Qué pasó al revisar (antes de compilar):** el mapa con índice entero no soporta
+  `EXISTS(clave de texto)` → habría fallado en la segunda validación; y el `WHEN OTHERS`
+  silenciador viola la regla obligatoria del enunciado (§2.3).
+- **Corrección:** (1) array asociativo propio `TYPE t_keys IS TABLE OF PLS_INTEGER INDEX
+  BY VARCHAR2(200)`; (2) `interpretar_fecha` levanta la excepción propia
+  `E_STG_FECHA_INVALIDA` (−20019) y el bloque por registro la captura **por nombre** para
+  traducirla a motivo de rechazo. Tras las correcciones, el body compiló sin errores a la
+  primera.
+- **Lección:** la revisión "pre-compilación" (leer y validar el enfoque antes de compilar)
+  detecta la mayoría de los anti-patrones; compilar solo lo confirma.
 
 ## 5. Estimación de código generado por IA vs escrito por el candidato
 
