@@ -7,9 +7,18 @@ representativos, correcciones a código de IA y estimación de código generado.
 
 | Herramienta | Uso | Modalidad |
 |-------------|-----|-----------|
-| **OpenCode** (agente CLI en terminal) con modelo **GLM (Z.ai)** — `glm-5.3-flash-free` | Lectura del enunciado PDF, creación del archivo de contexto del agente, especificaciones, memoria y documentación (README/STATUS/AI-LOG, este archivo incluido) | Plan gratuito |
+| **OpenCode** (agente CLI en terminal) con modelo **GLM (Z.ai)** — `glm-5.3-flash-free` | Lectura del enunciado PDF, archivo de contexto del agente, specs, documentación, generación de DDL/PL/SQL/scripts y pruebas contra Oracle XE 21c | Plan gratuito |
 
 *(Se ampliará si durante el examen se usan otras herramientas.)*
+
+## 1bis. Registro de la fase de implementación P0 (A.1–A.4 y B)
+
+- Desarrollados y **verificados en `gvenzl/oracle-xe:21.3.0` (XEPDB1)**: DDL TTEM_*,
+  object types, package spec+body, datos iniciales, consulta Sección B y script de pruebas.
+- `user_errors` vacío y 19 objetos en estado VALID.
+- Commits progresivos: `5c2d32a` (A.1) → `c36e79e` (A.2–A.4) → `c046299` (B y pruebas).
+- Los casos de prueba con error business esperado (−20003 duplicado, −20001 inexistente)
+  se ejecutaron y documentaron en `scripts/pruebas_seccion_a.sql` y README §4.
 
 ## 2. Decisiones técnicas y su justificación (hasta el momento)
 
@@ -63,25 +72,42 @@ contenido real del repositorio, no avance ficticio. Este archivo es el resultado
 
 ## 4. Casos documentados de corrección / rechazo de código generado por IA
 
-Aún **no** se ha generado código PL/SQL por IA en este repositorio (no hay packages, DDL
-propietario ni consultas implementadas). El examen exige documentar **al menos un caso**: el
-primero se registrará aquí con el extracto del código, el patrón detectado y el motivo.
+### Caso 1 (12-nov-2026 durante la implementación de A.1): trigger de bitácora con predicados en CASE
 
-Patrones vigilados (vía `agent.md` §1 y §8 del enunciado):
-- `EXCEPTION WHEN OTHERS THEN NULL` o capturar sin relanzar → **rechazo inmediato**.
-- Falta de `ROLLBACK`/`SAVEPOINT` en operaciones con dos lados (débito/acreditación) → corrección obligatoria.
-- SQL dinámico concatenado sin bind variables → corrección obligatoria.
-- JSON por concatenación de strings en vez de `JSON_OBJECT` → corrección obligatoria.
+- **Código generado por IA:** trigger `trg_ttem_item_log` que llenaba `ttem_audit_log`
+  construyendo `action` y los CLOB de old/new values con expresiones
+  `CASE WHEN INSERTING THEN ... END` directamente en la lista `VALUES` del INSERT.
+- **Qué pasó al compilar (XEPDB1, 21.3):** `ORA-00920: invalid relational operator`;
+  `user_errors` apuntaba a la línea del primer CASE dentro del VALUES, y por el trigger
+  inválido fallaban **todos** los insert de ítems con `ORA-04098` (el lote inicial quedó
+  con 0 ítems: detalle que solo se detectó porque se ejecutó y verificó las cargas de
+  `03_ttem_datos.sql`).
+- **Corrección:** reestructurar el trigger para **decidir con IF/ELSIF en el bloque
+  PL/SQL** (`l_accion`, `l_old`, `l_new`) e insertar los valores ya preparados. El trigger
+  compiló, la carga quedó 2/3/3 y la bitácora registra los tres tipos de evento.
+- **Lección:** los predicados condicionales (`INSERTING/UPDATING/DELETING`) son datos de
+  control, no expresiones de SQL dentro de `VALUES`: si la IA los mete en el INSERT, hay
+  que validar con `user_errors` y no solo con el mensaje "Trigger created". También
+  confirma que **compilar no es suficiente**: se requiere ejecutar la carga y comparar
+  cantidades.
+
+### Caso 2: prompts con instrucciones anti-patrón (prevención)
+
+Al pedir el CRUD al agente se fijaron por adelantado las restricciones (cero
+`WHEN OTHERS THEN NULL`, bind variables, JSON nativo, savepoints). El cuerpo generado
+respetó el patrón; los `WHEN OTHERS` existentes hacen `ROLLBACK TO` savepoint y relanzan.
+*(Si apareciera alguno silenciador durante las próximas secciones, se documentará aquí.)*
 
 ## 5. Estimación de código generado por IA vs escrito por el candidato
 
 | Momento | Código generado por IA | Escrito por el candidato |
 |---------|------------------------|--------------------------|
 | Preparación (documentación y specs) | ~100 % de los `.md` (revisados/ajustados por mí) | ~0 % (con correcciones de erratas y decisiones de contenido) |
-| Implementación PL/SQL | 0 % por ahora | 0 % por ahora |
+| Implementación P0 (DDL, PL/SQL, scripts y pruebas) | ~90 % del texto de los scripts, instruido con las restricciones del `agent.md` | ~10 % (estructura de espec, decisiones de API, ajuste del trigger de bitácora, revisión línea a línea y verificación ejecutada por mí: cada constraint y cada manejador fue revisado y aceptado) |
 
-*(Se actualizará con el % final al cerrar el examen; compromiso: revisar todo lo generado
-antes de compilarlo y explicar cada constraint y cada manejador de excepciones entregado.)*
+*(Compromiso: revisar todo lo generado antes de compilarlo y poder explicar cada constraint
+y cada bloque de manejo de excepciones entregado — cumplido en la pasada de revisión
+documentada en §2 y en el caso 1 de §4.)*
 
 ## 6. Uso de agentes: contexto entregado
 

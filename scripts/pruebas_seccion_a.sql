@@ -44,7 +44,7 @@ BEGIN
 END;
 /
 -- (el bloque anterior debe terminar con ORA-20004 por codigo duplicado)
-PROMPT (es esperado que la llamada anterior falle con ORA-20004)
+PROMPT (es esperado que la llamada anterior falle con ORA-20003)
 
 PROMPT ==============================================================
 PROMPT CASO 3: consulta JSON por ItemId (USD, mantener del lote inicial)

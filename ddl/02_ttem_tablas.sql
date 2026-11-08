@@ -103,33 +103,61 @@ SHOW ERROR
 CREATE OR REPLACE TRIGGER trg_ttem_item_log
 AFTER INSERT OR UPDATE OR DELETE ON ttem_item
 FOR EACH ROW
+DECLARE
+  l_accion CHAR(1);
+  l_old    CLOB;
+  l_new    CLOB;
 BEGIN
+  IF INSERTING THEN
+    l_accion := 'I';
+    l_old    := NULL;
+    l_new    := TO_CLOB(JSON_OBJECT(
+                 'itemId'    VALUE :new.item_id,
+                 'itemCode'  VALUE :new.item_code,
+                 'itemName'  VALUE :new.item_name,
+                 'itemValue' VALUE :new.item_value,
+                 'status'    VALUE :new.status,
+                 'validFrom' VALUE TO_CHAR(:new.valid_from, 'YYYY-MM-DD'),
+                 'validTo'   VALUE TO_CHAR(:new.valid_to, 'YYYY-MM-DD')));
+  ELSIF UPDATING THEN
+    l_accion := 'U';
+    l_old    := TO_CLOB(JSON_OBJECT(
+                 'itemId'    VALUE :old.item_id,
+                 'itemCode'  VALUE :old.item_code,
+                 'itemName'  VALUE :old.item_name,
+                 'itemValue' VALUE :old.item_value,
+                 'status'    VALUE :old.status,
+                 'validFrom' VALUE TO_CHAR(:old.valid_from, 'YYYY-MM-DD'),
+                 'validTo'   VALUE TO_CHAR(:old.valid_to, 'YYYY-MM-DD')));
+    l_new    := TO_CLOB(JSON_OBJECT(
+                 'itemId'    VALUE :new.item_id,
+                 'itemCode'  VALUE :new.item_code,
+                 'itemName'  VALUE :new.item_name,
+                 'itemValue' VALUE :new.item_value,
+                 'status'    VALUE :new.status,
+                 'validFrom' VALUE TO_CHAR(:new.valid_from, 'YYYY-MM-DD'),
+                 'validTo'   VALUE TO_CHAR(:new.valid_to, 'YYYY-MM-DD')));
+  ELSE
+    l_accion := 'D';
+    l_old    := TO_CLOB(JSON_OBJECT(
+                 'itemId'    VALUE :old.item_id,
+                 'itemCode'  VALUE :old.item_code,
+                 'itemName'  VALUE :old.item_name,
+                 'itemValue' VALUE :old.item_value,
+                 'status'    VALUE :old.status,
+                 'validFrom' VALUE TO_CHAR(:old.valid_from, 'YYYY-MM-DD'),
+                 'validTo'   VALUE TO_CHAR(:old.valid_to, 'YYYY-MM-DD')));
+    l_new    := NULL;
+  END IF;
+
   INSERT INTO ttem_audit_log (audit_log_id, item_id, action,
                               old_values, new_values,
                               changed_by, changed_at)
   VALUES (seq_ttem_audit_log.NEXTVAL,
           NVL(:old.item_id, :new.item_id),
-          CASE WHEN INSERTING THEN 'I'
-               WHEN UPDATING  THEN 'U'
-               ELSE 'D' END,
-          CASE WHEN INSERTING THEN NULL ELSE
-            TO_CLOB(JSON_OBJECT('itemId' VALUE :old.item_id,
-                                'itemCode' VALUE :old.item_code,
-                                'itemName' VALUE :old.item_name,
-                                'itemValue' VALUE :old.item_value,
-                                'status' VALUE :old.status,
-                                'validFrom' VALUE TO_CHAR(:old.valid_from, 'YYYY-MM-DD'),
-                                'validTo' VALUE TO_CHAR(:old.valid_to, 'YYYY-MM-DD')))
-          END,
-          CASE WHEN DELETING THEN NULL ELSE
-            TO_CLOB(JSON_OBJECT('itemId' VALUE :new.item_id,
-                                'itemCode' VALUE :new.item_code,
-                                'itemName' VALUE :new.item_name,
-                                'itemValue' VALUE :new.item_value,
-                                'status' VALUE :new.status,
-                                'validFrom' VALUE TO_CHAR(:new.valid_from, 'YYYY-MM-DD'),
-                                'validTo' VALUE TO_CHAR(:new.valid_to, 'YYYY-MM-DD')))
-          END,
+          l_accion,
+          l_old,
+          l_new,
           USER,
           SYSDATE);
 END;

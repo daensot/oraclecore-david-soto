@@ -1,0 +1,22 @@
+# Credenciales y configuracion local (plantilla en connection.env.example)
+connection.env
+*.env
+!connection.env.example
+
+# Contraseñas o datos de conexión nunca en el repositorio
+*password*
+
+# Salidas y artefactos locales
+*.spool
+*.lis
+*.trc
+*.log
+sqlplus_hist/
+nohup.out
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

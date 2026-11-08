@@ -20,30 +20,33 @@ examen. Complementa `agent.md` (contexto del agente) y `AI-LOG.md` (bitácora de
 
 | # | Decisión | Estado | Justificación |
 |---|----------|--------|---------------|
-| D1 | Rango de errores propios: **−20000 … −20029** (reservado a errores de negocio; −20999 queda para técnicos) | Definido | Necesito diferenciar error de negocio de error técnico en code review del core |
-| D2 | Eliminación de ítems de catálogo: **lógica** (`status = 'I'`) | Por confirmar en código | Preserva trazabilidad y es requerimiento de auditoría bancaria; el borrado físico rompe la bitácora |
-| D3 | Control de transacción Sección C: **lo controla el procedimiento** con `SAVEPOINT` + `ROLLBACK TO savepoint` ante falla parcial y COMMIT al final | Por confirmar en código | El invocador no debería preocuparse por consistencia de una partida doble; el savepoint permite simular la falla |
-| D4 | Modelo de catálogos: tabla `ttem_catalog` + `ttem_item` + bitácora `ttem_audit_log` | Por implementar | La bitácora suma puntaje y es obligatoria en contexto bancario (trazabilidad de cambios) |
-| D5 | JSON construido con `JSON_OBJECT(... RETURNING CLOB)` y `NULL ON NULL` explícito | Por implementar | Contrato exige atributos siempre presentes, incluso null; `JSON_OBJECT` es el modo nativo |
-| D6 | Consulta Sección B con `LISTAGG` para usuarios OLB y `CASE`/`NVL` para nombre normalizado y fecha de referencia | Por implementar | Consolidación en una sola columna exigida por el enunciado |
+| D1 | Rango de errores propios: **−20001…−20005** para catálogos (Sección A) y **−20010…−20029** reservado para la Sección C | Implementado en `pkg_ttem_catalog` | Necesito diferenciar error de negocio de error técnico en code review del core |
+| D2 | Eliminación de ítems de catálogo: **lógica** (`status = 'I'`, idempotente) | Implementada y probada | Preserva trazabilidad y es requerimiento de auditoría bancaria; el borrado físico rompe la bitácora |
+| D3 | Control de transacción Sección C: **lo controla el procedimiento** con `SAVEPOINT` + `ROLLBACK TO savepoint` ante falla parcial y COMMIT al final | Por implementar (P1) | El invocador no debería preocuparse por consistencia de una partida doble; el savepoint permite simular la falla |
+| D4 | Modelo de catálogos: `ttem_catalog` + `ttem_item` + bitácora `ttem_audit_log` (I/U/D con old/new en JSON, trigger `trg_ttem_item_log`) | Implementada | La bitácora suma puntaje y es obligatoria en contexto bancario (trazabilidad de cambios) |
+| D5 | JSON construido con `JSON_OBJECT(... NULL ON NULL RETURNING CLOB)` | Implementada y probada (salida exacta con USD item 2) | Contrato exige atributos siempre presentes, incluso null; `JSON_OBJECT` es el modo nativo |
+| D6 | Consulta Sección B con `LISTAGG` para usuarios OLB, `CASE` para tipo de persona y `TRIM+REGEXP_REPLACE` para nombre normalizado | Implementada y probada con las 5 cuentas | Consolidación en una sola columna exigida por el enunciado |
+| D7 | El CRUD de catálogos controla su transacción dentro del package (SAVEPOINT + COMMIT + ROLLBACK/relanzar) | Implementada | Autonomía de la API del core; misma convención que se usará en la Sección C |
 
 ## 3. Tabla de códigos de error propios (duplicar en README)
 
 | Código | Excepción (`E_*`) | Significado |
 |--------|--------------------|-------------|
 | -20001 | `E_ITEM_NO_EXISTE` | ItemId consultado no existe |
-| -20002 | `E_CATALOGO_NO_EXISTE` | Catálogo no existe |
-| -20003 | `E_ITEM_DUPLICADO` | Código de ítem ya existe en el catálogo |
+| -20002 | `E_CATALOGO_NO_EXISTE` | Catálogo no existe (o no está activo cuando se requiere) |
+| -20003 | `E_DUPLICADO` | Código de ítem ya existe en el catálogo (o catálogo duplicado) |
 | -20004 | `E_VIGENCIA_INVALIDA` | `valid_to < valid_from` |
-| -20005 | `E_DATO_OBLIGATORIO` | Campo obligatorio vacío (p. ej. nombre) |
-| -20010 | `E_TRX_MONTO_INVALIDO` | Monto ≤ 0 o más de 2 decimales |
+| -20005 | `E_DATO_OBLIGATORIO` | Campo obligatorio vacío o estado distinto de A/I |
+| -20010 | `E_TRX_MONTO_INVALIDO` | Monto ≤ 0 o más de 2 decimales (Sección C) |
 | -20011 | `E_TRX_CUENTA_NO_EXISTE` | Cuenta origen/destino inexistente |
 | -20012 | `E_TRX_CUENTA_NO_ACTIVA` | Cuenta en estado distinto de 'A' |
 | -20013 | `E_TRX_MONEDA_MISMATCH` | Moneda no coincide con la de las cuentas |
 | -20014 | `E_TRX_SALDO_INSUFICIENTE` | Saldo insuficiente en origen |
 | -20015 | `E_TRX_REFERENCIA_DUPLICADA` | Referencia ya registrada (idempotencia) |
 | -20016 | `E_TRX_CUENTAS_IGUALES` | Origen = destino |
-| (ajustar códigos según implementación final — mantener sincronía README) |
+
+*(Rango −20010…−20029 reservado para la Sección C: se implementa al desarrollarla y se
+mantiene en sincronía con el README.)*
 
 ## 4. Supuestos documentados sobre datos inconsistentes
 
@@ -62,14 +65,14 @@ examen. Complementa `agent.md` (contexto del agente) y `AI-LOG.md` (bitácora de
 
 | Requisito | Estado | Nota |
 |-----------|--------|------|
-| Esqueleto funcional (≤ min. 25) | Pendiente | Crear `ddl/` + `plsql/` compilables |
-| A.1 Modelo TTEM_* | Pendiente | |
-| A.2 Package CRUD + Object Types | Pendiente | |
-| A.3 Validaciones + excepciones | Pendiente | |
-| A.4 JSON por ItemId | Pendiente | |
-| B Consulta cliente | Pendiente | |
-| C Transferencia | Pendiente | |
-| D Propuesta de mejora | Pendiente | |
+| Esqueleto funcional (≤ min. 25) | Hecho | Commits `5c2d32a` + `c36e79e`; VALID en 21.3 |
+| A.1 Modelo TTEM_* | Hecho | 2/3/3 filas verificadas (catálogo/ítem/bitácora) |
+| A.2 Package CRUD + Object Types | Hecho | `pkg_ttem_catalog` VALID; collection y tipo en API |
+| A.3 Validaciones + excepciones | Hecho | −20001…−20005 implementados y probados |
+| A.4 JSON por ItemId | Hecho | Salida USD exacta al ejemplo del enunciado |
+| B Consulta cliente | Hecho | 5 casos verificados; inexistente → 0 filas |
+| C Transferencia | Pendiente (P1) | Siguiente bloque |
+| D Propuesta de mejora | Pendiente (P1) | Redacción en README |
 | A.5 Carga masiva | Pendiente (P2) | Solo si sobra tiempo |
 
 ## 6. Correcciones / rechazo de código generado por IA
