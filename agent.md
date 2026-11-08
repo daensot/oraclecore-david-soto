@@ -1,7 +1,7 @@
 # AGENT.MD — Contexto del agente (OpenCode / Claude Code / equivalente)
 
 Proyecto: **Prueba Técnica — Desarrollador(a) Oracle PL/SQL · Core Bancario (Credicorp Bank)**
-Proyecto: **CoreCatalog & Settlement — Catálogos parametrizables y liquidación de transacciones**
+Solución: **CoreCatalog & Settlement — Catálogos parametrizables y liquidación de transacciones**
 Versión del examen: 4 · Octubre de 2026 · Duración: 2 h 30 min (sin contar preparación del entorno).
 
 Este archivo es el contexto que se entrega al agente de IA. Las especificaciones detalladas por

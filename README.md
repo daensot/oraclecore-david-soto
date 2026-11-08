@@ -175,34 +175,13 @@ bloqueada), `9999999999999` (0 filas).
 
 ## 7. Sección D — Propuesta de mejora (≤ 20 líneas)
 
-Escenario: el alta de ítems de catálogo (comisiones) se pide por correo y la ejecuta a mano
-un desarrollador en producción. Hubo incidentes de vigencias mal configuradas y cambios sin
-trazabilidad de aprobación.
+**Escenario:** el alta de ítems de catálogo (comisiones) llega por correo y la ejecuta a mano un desarrollador en producción; incidentes: vigencias mal configuradas y cambios sin trazabilidad de aprobación.
 
-1. **Automatizar primero y qué resuelve:** el canal de solicitud/ejecución — pasar el
-   "correo + script manual" a un flujo de solicitud y carga en la BD con validación
-   automática del modelo de la Sección A. Resuelve los dos problemas concretos: vigencias
-   incoherentes (se rechazan al instante, como en `ttem_item_stg`) y ausencia de trazabilidad
-   de aprobación.
-2. **Pasos y componentes:** (1) solicitud en formulario/ticket con los datos del ítem
-   (catálogo, código, vigencias) que se validan en vivo contra `ttem_catalog`/`ttem_item`;
-   (2) la solicitud queda `PENDIENTE`; (3) **aprobación del segundo responsable** (no puede
-   aprobar quien creó la solicitud); (4) carga a staging `ttem_item_stg` y ejecución del
-   package de carga (`pkg_ttem_load`): normaliza TRIM/UPPER, valida por registro y genera
-   el reporte de rechazos en `ttem_load_error`; (5) notificación del resultado al
-   solicitante con el detalle de los rechazos.
-3. **Controles:** maker–checker (crear ≠ aprobar), auditoría completa ya disponible en
-   `ttem_audit_log` (quién cambió qué, valores anteriores y nuevos en JSON), reversión por
-   ítem restituyendo los `old_values` del último evento, y eventuales vigencias siempre
-   `valid_to >= valid_from` (constraint ya existente).
-4. **Riesgos / dependencias / factibilidad:** requiere mitigar el hábito del "arreglo
-   rápido en producción" (gobernanza, no tecnología); dependencia de un canal de ticket
-   formal y de designar aprobadores por área; factibilidad alta porque reutiliza el modelo
-   y el package ya construidos (esfuerzo estimado: 2-3 semanas del equipo core-PL/SQL).
-5. **Medición:** incidentes de vigencias mal configuradas → 0; 100 % de cambios con
-   aprobador registrado; tiempo de alta de un ítem (hoy: minutos/horas de un desarrollador
-   con riesgo humano, objetivo < 1 hora sin intervención de TI); proporción de solicitudes
-   rechazadas por el validador automático (indicador de calidad de captura).
+1. **Automatizar primero y qué resuelve:** el canal de alta (correo + script manual) → flujo de solicitud y carga en la BD con la validación del modelo de la Sección A. Resuelve los dos incidentes concretos: vigencias incoherentes (se rechazan al instante, como en `ttem_item_stg`) y la ausencia de trazabilidad de aprobación.
+2. **Pasos y componentes:** (1) ticket con los datos del ítem validados en vivo contra `ttem_catalog`/`ttem_item`; (2) la solicitud queda `PENDIENTE`; (3) **aprobación de un segundo responsable** (no puede aprobar quien la creó); (4) carga a `ttem_item_stg` + ejecución de `pkg_ttem_load` (normaliza TRIM/UPPER, valida por registro, rechazos en `ttem_load_error`); (5) notificación del resultado al solicitante con el detalle de los rechazos.
+3. **Controles:** maker–checker (crear ≠ aprobar); auditoría ya disponible en `ttem_audit_log` (quién cambió qué, old/new en JSON) con reversión por ítem restaurando `old_values`; vigencias siempre `valid_to >= valid_from` (constraint ya existente).
+4. **Riesgos / dependencias / factibilidad:** gobernanza contra el hábito del "arreglo rápido en producción"; requiere canal de tickets formal y aprobadores designados por área; factibilidad alta porque reutiliza el modelo y los packages ya construidos (esfuerzo estimado: 2–3 semanas del equipo core-PL/SQL).
+5. **Medición:** incidentes de vigencias mal configuradas = 0; 100 % de cambios con aprobador registrado; tiempo de alta de un ítem < 1 hora sin intervención de TI; % de solicitudes rechazadas por el validador automático (indicador de calidad de captura).
 
 ## 8. Documentos complementarios
 
