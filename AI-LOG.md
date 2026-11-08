@@ -20,6 +20,21 @@ representativos, correcciones a código de IA y estimación de código generado.
 - Los casos de prueba con error business esperado (−20003 duplicado, −20001 inexistente)
   se ejecutaron y documentaron en `scripts/pruebas_seccion_a.sql` y README §4.
 
+## 1ter. Registro de la fase de implementación P1 — Sección C
+
+- Desarrollado y **verificado en XEPDB1**: `plsql/pkg_core_settlement.pks` / `.pkb` con
+  `transferir` (8 reglas) y bonus `revertir`; `scripts/pruebas_seccion_c.sql` con los 6
+  casos del enunciado + 6 validaciones extra + prueba de reversa.
+- `user_errors` vacío tras compilar el nuevo package; 24 objetos en estado VALID.
+- Corrida limpia tras restaurar los saldos de referencia (5250 / 350.50):
+  - Caso 1 éxito: trx desde `SEQ_CORE_TRX`, saldos 5150 / 450.50 y una única fila TRF.
+  - Casos 2–5: excepciones propias −20015 (duplicada), −20014 (saldo), −20013 (moneda),
+    −20012 (destino bloqueada) — el script maneja las excepciones **por nombre**.
+  - Caso 6 (falla simulada −20099): el débito se deshace; demostrado que los saldos no
+    cambian y que no queda fila REF-T002 en `CORE_TRX` (atomicidad).
+  - Bonus: reversa (fila REV con cuentas invertidas, saldos 5250 / 350.50); la segunda
+    reversa se rechaza con −20018.
+
 ## 2. Decisiones técnicas y su justificación (hasta el momento)
 
 > Estado: decisiones **de planificación**. Las implementaciones se documentarán al
@@ -71,6 +86,19 @@ el «cómo los resolvería».
 contenido real del repositorio, no avance ficticio. Este archivo es el resultado.
 
 ## 4. Casos documentados de corrección / rechazo de código generado por IA
+
+### Caso 3 (durante la implementación de la Sección C): verificador del script de pruebas
+
+- **Código generado por IA:** en `scripts/pruebas_seccion_c.sql`, el manejador del bloque
+  de validaciones extra usaba `CASE SQLCODE WHEN a OR b THEN ...` (con un `||` mezclado
+  entre los operadores).
+- **Qué pasó:** el rechazo esperado de "cuentas iguales" (−20016) no entraba por la rama
+  correcta: se interpretó como *FALLA INESPERADA* y el bloque terminó con error aunque el
+  package se comportó bien.
+- **Corrección:** simplificar a `IF SQLCODE IN (...) THEN ... ELSE ... RAISE; END IF` con
+  la lista completa de códigos esperados. Re-corrida limpia: los 13 controles en verde.
+- **Lección:** el error estaba en el **script de prueba**, no en el package; separar la
+  lógica de negocio de la de verificación evita culpar al código correcto.
 
 ### Caso 1 (12-nov-2026 durante la implementación de A.1): trigger de bitácora con predicados en CASE
 

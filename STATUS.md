@@ -24,8 +24,8 @@ Hecho / Parcial / No hecho.
 | A.3 Validaciones y excepciones propias | Hecho | Existencia catálogo/ítem, duplicados, vigencias, datos obligatorios, estado A/I; códigos −20001…−20005 documentados (README §5); cero `WHEN OTHERS THEN NULL`: los `WHEN OTHERS` hacen ROLLBACK TO savepoint y relanzan |
 | A.4 Consulta JSON por ItemId | Hecho | `obtener_item_json` con `JSON_OBJECT ... NULL ON NULL RETURNING CLOB`; salidas probadas: USD (formato exacto del contrato/ejemplo del enunciado) y −20001 para ítem inexistente |
 | B Consulta de cliente por cuenta | Hecho | `scripts/seccion_b_consulta_cliente.sql`; LISTAGG con estado, nombre normalizado (TRIM + compresión de espacios), fecha de referencia con tipo; los 5 casos verificados (inexistente → 0 filas) |
-| C Transferencia con falla simulada | No hecho | (P1) Firma y 6 casos definidos en `specs/03-seccion-c-liquidacion.md`; siguiente bloque a implementar |
-| D Propuesta de mejora | No hecho | (P1) Estructura de 5 puntos esbozada; redacción final ≤ 20 líneas en README |
+| C Transferencia con falla simulada | Hecho | `pkg_core_settlement` spec+body VALID; 6 casos del enunciado en verde (duplicada → −20015, saldo → −20014, moneda → −20013, bloqueada → −20012, falla sim. → −20099 con saldos y CORE_TRX intactos) + extras (monto, referencia, cuentas iguales, inexistente); transacción controlada por el procedimiento (SAVEPOINT/COMMIT/ROLLBACK+RAISE) y bloqueo FOR UPDATE en orden ascendente de account_no. Bonus: `revertir` con idempotencia (−20018) |
+| D Propuesta de mejora | No hecho | (P1) Único pendiente; estructura de 5 puntos esbozada en specs/04 |
 | A.5 Carga masiva (P2) | No hecho | Solo si sobra tiempo; criterio 5 cargados / 7 rechazados |
 
 ## 3. Evidencia de verificación (Oracle XE 21c, esquema donde se probó)
@@ -40,8 +40,6 @@ Hecho / Parcial / No hecho.
 
 ## 4. Próximos pasos
 
-1. **C (P1)** — `pkg_core_settlement.transferir` con SAVEPOINT, falla simulada e
-   idempotencia por referencia (specs/03).
-2. **D (P1)** — redacción final de la propuesta en README.
-3. P2 (A.5) solo si queda tiempo.
-4. Sincronizar final de README/STATUS/AI-LOG antes del último commit.
+1. **D (P1)** — redacción final de la propuesta de mejora en README (≤ 20 líneas, sin código).
+2. **A.5 (P2)** — carga masiva del lote `LOTE-2026-10` solo si queda tiempo (5 cargados / 7 rechazados).
+3. Sincronizar final de README/STATUS/AI-LOG antes del último commit.

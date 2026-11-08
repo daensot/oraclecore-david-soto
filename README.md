@@ -1,8 +1,8 @@
 # README — oraclecore-david-soto
 
 Prueba Técnica: Desarrollo Oracle PL/SQL para el Core Bancario · Credicorp Bank (v4, oct. 2026)
-Proyecto: **CoreCatalog & Settlement** — catálogos parametrizables (Sección A) y consulta de cliente
-por cuenta (Sección B), bloque **P0** completo y verificado.
+Proyecto: **CoreCatalog & Settlement** — catálogos parametrizables y consulta de cliente (bloque
+**P0**, verificado) y **liquidación de transferencias entre cuentas (Sección C, verificado)**.
 
 ## 1. Herramientas
 
@@ -15,8 +15,8 @@ por cuenta (Sección B), bloque **P0** completo y verificado.
 ```
 setup/    scripts del Anexo B, SIN modificaciones
 ddl/      01 tipos (Object Types) · 02 tablas TTEM_* + auditoría · 03 datos iniciales
-plsql/    pkg_ttem_catalog.pks (spec) · pkg_ttem_catalog.pkb (body)
-scripts/  seccion_b_consulta_cliente.sql (Sección B) · pruebas_seccion_a.sql (casos A)
+plsql/    pkg_ttem_catalog.pks/.pkb (Sección A) · pkg_core_settlement.pks/.pkb (Sección C)
+scripts/  seccion_b_consulta_cliente.sql (B) · pruebas_seccion_a.sql (A) · pruebas_seccion_c.sql (C)
 specs/    especificaciones funcionales por sección
 ```
 
@@ -47,8 +47,10 @@ CORE_TRX 11 · TTEM_ITEM_STG 12.
 SQL> @ddl/01_ttem_tipos.sql        -- Object Types typ_ttem_item / typ_ttem_item_tab
 SQL> @ddl/02_ttem_tablas.sql       -- ttem_catalog, ttem_item, ttem_audit_log, SEQ_*, TRG_*
 SQL> @ddl/03_ttem_datos.sql        -- MONEDA(PEN,USD) + TIPO_COMISION(COM_MANT)
-SQL> @plsql/pkg_ttem_catalog.pks   -- spec del package
-SQL> @plsql/pkg_ttem_catalog.pkb   -- body del package
+SQL> @plsql/pkg_ttem_catalog.pks   -- spec del package de catalogos
+SQL> @plsql/pkg_ttem_catalog.pkb   -- body del package de catalogos
+SQL> @plsql/pkg_core_settlement.pks -- spec del package de liquidacion (Seccion C)
+SQL> @plsql/pkg_core_settlement.pkb -- body del package de liquidacion (Seccion C)
 
 -- 4) Verificación de compilación (esperado: sin filas):
 SELECT name, line, text FROM user_errors;
@@ -81,10 +83,34 @@ anteriores/nuevos en JSON.
 Ejecución completa de casos: `@scripts/pruebas_seccion_a.sql` (6 casos, errores esperados
 incluidos).
 
+**C — Liquidación** (`plsql/pkg_core_settlement.pkb`, probado con
+`scripts/pruebas_seccion_c.sql`):
+
+```sql
+DECLARE
+  l_trx_id core_trx.trx_id%TYPE;
+BEGIN
+  pkg_core_settlement.transferir('1910001000011', '1910002000017', 100,
+                                 'PEN', 'REF-T001', NULL, 'N', l_trx_id);
+  DBMS_OUTPUT.PUT_LINE('trx: ' || l_trx_id);   -- exito: saldos 5150.00 / 450.50
+END;
+/
+```
+
+Los 6 casos del enunciado pasan: éxito con partida doble en una única fila `TRF`
+(id del `SEQ_CORE_TRX`), duplicado `REF-T001` → ORA-20015 (idempotencia), saldo
+insuficiente → ORA-20014, moneda distinta → ORA-20013, destino bloqueada → ORA-20012 y
+`p_simular_falla='S'` → ORA-20099 **dejando saldos y `CORE_TRX` intactos** (atomicidad
+demostrada). Bonus: `pkg_core_settlement.revertir` genera el movimiento `REV` que invierte
+las cuentas y restituye saldos; una segunda reversa se rechaza con ORA-20018.
+Decisiones: la transacción la controla el **procedimiento** (`SAVEPOINT sp_transferencia`,
+`COMMIT` al final, `ROLLBACK TO` + `RAISE` ante error) y las cuentas se bloquean con
+`SELECT ... FOR UPDATE` en orden ascendente de `account_no` para evitar deadlocks.
+
 ## 5. Tabla de códigos de error propios (Sección A.3)
 
-Rango adoptado: **−20000 … −20029** (negocio). Dominios: −20001…−20005 catálogos (Sección A);
-−20010…−20029 reservado para la Sección C (transacciones).
+Rango adoptado: **−20000 … −20099** (negocio). Dominios: −20001…−20005 catálogos (Sección A);
+−20010…−20029 transacciones (Sección C); −20099 error controlado de falla simulada.
 
 | Código | Excepción | Significado |
 |--------|------------|-------------|
@@ -93,6 +119,16 @@ Rango adoptado: **−20000 … −20029** (negocio). Dominios: −20001…−200
 | -20003 | `E_DUPLICADO` | Ítem o catálogo cuyo código ya existe (UNIQUE) |
 | -20004 | `E_VIGENCIA_INVALIDA` | `valid_to < valid_from` |
 | -20005 | `E_DATO_OBLIGATORIO` | Campo obligatorio vacío / estado inválido |
+| -20010 | `E_TRX_MONTO_INVALIDO` | Monto nulo, ≤ 0 o con más de 2 decimales (Sección C) |
+| -20011 | `E_TRX_CUENTA_NO_EXISTE` | Cuenta origen/destino inexistente (Sección C) |
+| -20012 | `E_TRX_CUENTA_NO_ACTIVA` | Cuenta (origen o destino) en estado distinto de 'A' (Sección C) |
+| -20013 | `E_TRX_MONEDA_MISMATCH` | Moneda no coincide con la de ambas cuentas (Sección C) |
+| -20014 | `E_TRX_SALDO_INSUFICIENTE` | Saldo insuficiente en origen (Sección C) |
+| -20015 | `E_TRX_REFERENCIA_DUPLICADA` | Referencia ya registrada (idempotencia, Sección C) |
+| -20016 | `E_TRX_CUENTAS_IGUALES` | Origen = destino (Sección C) |
+| -20017 | `E_TRX_DATO_OBLIGATORIO` | Referencia o moneda vacía / modo inválido (Sección C) |
+| -20018 | `E_TRX_NO_REVERSIBLE` | Movimiento no revertible o ya revertido (reversa, Sección C) |
+| -20099 | `E_TRX_FALLA_SIMULADA` | Error controlado para demostrar atomicidad (`p_simular_falla='S'`) |
 
 ## 6. Comportamiento de la consulta de la Sección B
 

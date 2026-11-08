@@ -22,7 +22,7 @@ examen. Complementa `agent.md` (contexto del agente) y `AI-LOG.md` (bitácora de
 |---|----------|--------|---------------|
 | D1 | Rango de errores propios: **−20001…−20005** para catálogos (Sección A) y **−20010…−20029** reservado para la Sección C | Implementado en `pkg_ttem_catalog` | Necesito diferenciar error de negocio de error técnico en code review del core |
 | D2 | Eliminación de ítems de catálogo: **lógica** (`status = 'I'`, idempotente) | Implementada y probada | Preserva trazabilidad y es requerimiento de auditoría bancaria; el borrado físico rompe la bitácora |
-| D3 | Control de transacción Sección C: **lo controla el procedimiento** con `SAVEPOINT` + `ROLLBACK TO savepoint` ante falla parcial y COMMIT al final | Por implementar (P1) | El invocador no debería preocuparse por consistencia de una partida doble; el savepoint permite simular la falla |
+| D3 | Control de transacción Sección C: **lo controla el procedimiento** (`SAVEPOINT sp_transferencia` + `COMMIT` al final; `ROLLBACK TO savepoint` + `RAISE` ante error) | Implementada y probada (falla simulada −20099) | El invocador no debería preocuparse por la consistencia de una partida doble; el savepoint permite simular la falla sin dejar cambios en saldos ni en `CORE_TRX`. Además: bloqueo `FOR UPDATE` en orden ascendente de `account_no` para evitar deadlocks |
 | D4 | Modelo de catálogos: `ttem_catalog` + `ttem_item` + bitácora `ttem_audit_log` (I/U/D con old/new en JSON, trigger `trg_ttem_item_log`) | Implementada | La bitácora suma puntaje y es obligatoria en contexto bancario (trazabilidad de cambios) |
 | D5 | JSON construido con `JSON_OBJECT(... NULL ON NULL RETURNING CLOB)` | Implementada y probada (salida exacta con USD item 2) | Contrato exige atributos siempre presentes, incluso null; `JSON_OBJECT` es el modo nativo |
 | D6 | Consulta Sección B con `LISTAGG` para usuarios OLB, `CASE` para tipo de persona y `TRIM+REGEXP_REPLACE` para nombre normalizado | Implementada y probada con las 5 cuentas | Consolidación en una sola columna exigida por el enunciado |
@@ -37,16 +37,19 @@ examen. Complementa `agent.md` (contexto del agente) y `AI-LOG.md` (bitácora de
 | -20003 | `E_DUPLICADO` | Código de ítem ya existe en el catálogo (o catálogo duplicado) |
 | -20004 | `E_VIGENCIA_INVALIDA` | `valid_to < valid_from` |
 | -20005 | `E_DATO_OBLIGATORIO` | Campo obligatorio vacío o estado distinto de A/I |
-| -20010 | `E_TRX_MONTO_INVALIDO` | Monto ≤ 0 o más de 2 decimales (Sección C) |
-| -20011 | `E_TRX_CUENTA_NO_EXISTE` | Cuenta origen/destino inexistente |
-| -20012 | `E_TRX_CUENTA_NO_ACTIVA` | Cuenta en estado distinto de 'A' |
-| -20013 | `E_TRX_MONEDA_MISMATCH` | Moneda no coincide con la de las cuentas |
-| -20014 | `E_TRX_SALDO_INSUFICIENTE` | Saldo insuficiente en origen |
-| -20015 | `E_TRX_REFERENCIA_DUPLICADA` | Referencia ya registrada (idempotencia) |
-| -20016 | `E_TRX_CUENTAS_IGUALES` | Origen = destino |
+| -20010 | `E_TRX_MONTO_INVALIDO` | Monto nulo, ≤ 0 o con más de 2 decimales (Sección C) |
+| -20011 | `E_TRX_CUENTA_NO_EXISTE` | Cuenta origen/destino inexistente (Sección C) |
+| -20012 | `E_TRX_CUENTA_NO_ACTIVA` | Cuenta (origen o destino) en estado distinto de 'A' (Sección C) |
+| -20013 | `E_TRX_MONEDA_MISMATCH` | Moneda no coincide con la de ambas cuentas (Sección C) |
+| -20014 | `E_TRX_SALDO_INSUFICIENTE` | Saldo insuficiente (Sección C) |
+| -20015 | `E_TRX_REFERENCIA_DUPLICADA` | Referencia ya registrada (idempotencia, Sección C) |
+| -20016 | `E_TRX_CUENTAS_IGUALES` | Origen = destino (Sección C) |
+| -20017 | `E_TRX_DATO_OBLIGATORIO` | Referencia o moneda vacía / modo inválido (Sección C) |
+| -20018 | `E_TRX_NO_REVERSIBLE` | Movimiento no revertible o ya revertido (reversa) |
+| -20099 | `E_TRX_FALLA_SIMULADA` | Error controlado para demostrar atomicidad (Sección C) |
 
-*(Rango −20010…−20029 reservado para la Sección C: se implementa al desarrollarla y se
-mantiene en sincronía con el README.)*
+*(Rango −20010…−20099 de la Sección C: implementado en `pkg_core_settlement` y verificado;
+los nuevos códigos −20017/−20018/−20099 quedan documentados en el README.)*
 
 ## 4. Supuestos documentados sobre datos inconsistentes
 
@@ -71,8 +74,8 @@ mantiene en sincronía con el README.)*
 | A.3 Validaciones + excepciones | Hecho | −20001…−20005 implementados y probados |
 | A.4 JSON por ItemId | Hecho | Salida USD exacta al ejemplo del enunciado |
 | B Consulta cliente | Hecho | 5 casos verificados; inexistente → 0 filas |
-| C Transferencia | Pendiente (P1) | Siguiente bloque |
-| D Propuesta de mejora | Pendiente (P1) | Redacción en README |
+| C Transferencia | Hecho | `pkg_core_settlement` VALID; 6 casos + extras + reversa en verde (ver AI-LOG §1ter) |
+| D Propuesta de mejora | Pendiente (P1) | Único pendiente del enunciado; redacción en README |
 | A.5 Carga masiva | Pendiente (P2) | Solo si sobra tiempo |
 
 ## 6. Correcciones / rechazo de código generado por IA
