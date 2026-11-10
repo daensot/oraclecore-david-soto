@@ -81,7 +81,8 @@ SELECT i.catalog_id, c.catalog_code, i.item_code, i.item_name, i.item_value,
 
 PROMPT ==============================================================
 PROMPT PASO 3: detalle de los 7 rechazos en TTEM_LOAD_ERROR
-PROMPT ==============================================================SELECT e.stg_id, s.catalog_code, s.item_code, e.error_message
+PROMPT ==============================================================
+SELECT e.stg_id, s.catalog_code, s.item_code, e.error_message
   FROM ttem_load_error e JOIN ttem_item_stg s ON s.stg_id = e.stg_id
  ORDER BY e.stg_id;
 

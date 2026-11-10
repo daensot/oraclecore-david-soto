@@ -184,3 +184,11 @@ documentada en §2 y en los casos 1, 3 y 4 de §4.)*
   `CLAUDE.md`). No se entregó ningún otro archivo de contexto explícito.
 - Material base adicional: solo los scripts originales del Anexo B (entregados con el
   examen) y el propio enunciado. **No** se clonó repositorio con soluciones.
+
+## 7. Correcciones / rechazo de código generado por IA
+
+| # | Qué generó la IA | Qué corregí / por qué |
+|---|------------------|------------------------|
+| 1 | Query parcialmente comentado entre las lineas 84-85 en el archivo scripts/pruebas_seccion_a5.sql | Descomente la parte comentada. Daba error al correrlo y no mostraba los resultados. |
+| 2 | Instrucciones del README.md en la sección 3 con errores | Comandos docker de subida de los scripts generados. Direcctorios de los scripts dentro del contenedor. Daba error al ejecutar los script y no ejecutaba el sqlplus.|
+

@@ -28,15 +28,21 @@ docker run -d --name oracle-xe-21c -p 1521:1521 \
   -e ORACLE_PASSWORD=<clave_admin> gvenzl/oracle-xe:21.3.0
 docker logs -f oracle-xe-21c   # esperar "DATABASE IS READY TO USE!"
 
-# 1) Usuario CORE_DEV (contraseña pedida en runtime, como SYSTEM al PDB):
-docker cp setup/00_setup_usuario.sql oracle-xe-21c:/tmp/
-docker exec -it oracle-xe-21c sqlplus system/<clave_admin>@//localhost:1521/XEPDB1
-SQL> @/tmp/00_setup_usuario.sql
+# 1) Subir los archivos scripts al contenedor:
+docker cp setup/ oracle-xe-21c:/tmp/
+docker cp ddl/ oracle-xe-21c:/tmp/
+docker cp plsql/ oracle-xe-21c:/tmp/
+docker cp scripts/ oracle-xe-21c:/tmp/
 
-# 2) Modelo del core del Anexo B (como CORE_DEV):
-sql core_dev/<clave>@//localhost:1521/XEPDB1
-SQL> @setup/01_core_ddl.sql
-SQL> @setup/02_core_datos.sql
+# 2) Usuario CORE_DEV (contraseña pedida en runtime, como SYSTEM al PDB):
+docker exec -it oracle-xe-21c sqlplus system/<clave_admin>@//localhost:1521/XEPDB1
+SQL> @/tmp/setup/00_setup_usuario.sql
+SQL> exit
+
+# 3) Modelo del core del Anexo B (como CORE_DEV):
+docker exec -it oracle-xe-21c sqlplus core_dev/<clave>@//localhost:1521/XEPDB1
+SQL> @/tmp/setup/01_core_ddl.sql
+SQL> @/tmp/setup/02_core_datos.sql
 ```
 
 Verificación esperada de 02_core_datos.sql: CORE_CUSTOMER 6 · CORE_ACCOUNT 9 · OLB_USER 4 ·
