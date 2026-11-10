@@ -50,16 +50,16 @@ CORE_TRX 11 · TTEM_ITEM_STG 12.
 
 ```sql
 -- 3) Objetos propios (bloque P0, como CORE_DEV, en este orden):
-SQL> @ddl/01_ttem_tipos.sql        -- Object Types typ_ttem_item / typ_ttem_item_tab
-SQL> @ddl/02_ttem_tablas.sql       -- ttem_catalog, ttem_item, ttem_audit_log, SEQ_*, TRG_*
-SQL> @ddl/03_ttem_datos.sql        -- MONEDA(PEN,USD) + TIPO_COMISION(COM_MANT)
-SQL> @plsql/pkg_ttem_catalog.pks   -- spec del package de catalogos
-SQL> @plsql/pkg_ttem_catalog.pkb   -- body del package de catalogos
-SQL> @plsql/pkg_core_settlement.pks -- spec del package de liquidacion (Seccion C)
-SQL> @plsql/pkg_core_settlement.pkb -- body del package de liquidacion (Seccion C)
-SQL> @ddl/04_ttem_load_error.sql    -- tabla de errores de la carga masiva (A.5, P2)
-SQL> @plsql/pkg_ttem_load.pks       -- spec del package de carga masiva (A.5, P2)
-SQL> @plsql/pkg_ttem_load.pkb       -- body del package de carga masiva (A.5, P2)
+SQL> @/tmp/ddl/01_ttem_tipos.sql        -- Object Types typ_ttem_item / typ_ttem_item_tab
+SQL> @/tmp/ddl/02_ttem_tablas.sql       -- ttem_catalog, ttem_item, ttem_audit_log, SEQ_*, TRG_*
+SQL> @/tmp/ddl/03_ttem_datos.sql        -- MONEDA(PEN,USD) + TIPO_COMISION(COM_MANT)
+SQL> @/tmp/plsql/pkg_ttem_catalog.pks   -- spec del package de catalogos
+SQL> @/tmp/plsql/pkg_ttem_catalog.pkb   -- body del package de catalogos
+SQL> @/tmp/plsql/pkg_core_settlement.pks -- spec del package de liquidacion (Seccion C)
+SQL> @/tmp/plsql/pkg_core_settlement.pkb -- body del package de liquidacion (Seccion C)
+SQL> @/tmp/ddl/04_ttem_load_error.sql    -- tabla de errores de la carga masiva (A.5, P2)
+SQL> @/tmp/plsql/pkg_ttem_load.pks       -- spec del package de carga masiva (A.5, P2)
+SQL> @/tmp/plsql/pkg_ttem_load.pkb       -- body del package de carga masiva (A.5, P2)
 
 -- 4) Verificación de compilación (esperado: sin filas):
 SELECT name, line, text FROM user_errors;
